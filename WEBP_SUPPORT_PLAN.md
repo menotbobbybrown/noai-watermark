@@ -1,6 +1,6 @@
 # WebP Support Plan
 
-Status: reviewed for implementation; baseline verification recorded below
+Status: library implementation complete; validation and remaining integration gates recorded below
 
 Date: 2026-09-11
 
@@ -342,3 +342,28 @@ The external Photarium sample remains an integration requirement from the earlie
 - ExifTool 12.70 is installed. It was not run against the external sample during preparation.
 - Other Python versions, real model inference, a built-wheel install, and Photarium hosted readback have not been verified in this review.
 - Local test log: `/private/tmp/noai-webp-review-pytest.log` (temporary evidence; the result above is the durable record).
+
+## Implementation record
+
+The library changes implement strict input inspection, RIFF validation, C2PA payload dispatch, WebP EXIF/XMP/ICC handling, transactional cleanup, static regeneration, alpha retention, quality selection, structured verification, and CLI reporting. Public WebP cloning/injection remains deferred as specified. Detailed field coverage is documented in `WEBP_METADATA_POLICY.md`; release notes are in `CHANGELOG.md`.
+
+Implementation commits:
+
+- `6cb9faa`: format dispatch and RIFF validation.
+- `267c053`: C2PA, metadata filtering, preservation, and verification.
+- `9e80bcd`: static regeneration, CLI reporting, and regression tests.
+
+Validation completed:
+
+- Full suite on Python 3.14.3 / Pillow 12.3.0: **343 passed**, 13 pre-existing dependency warnings.
+- New WebP suites on Python 3.11.7 / Pillow 10.0.0: **115 passed**.
+- Full suite on Python 3.11.7 / Pillow 10.0.0: **343 passed** after installing Torch and Hugging Face Hub for existing tests. The initial lightweight-environment run failed 30 tests on those missing dependencies; the failures were resolved. Inference remains stubbed in regeneration tests.
+- Wheel built outside the repository and checked for all **29** top-level Python modules.
+- Installed wheel CLI exercised from `/private/tmp`, importing `metadata_handler` from its isolated `site-packages`; its cleaned output is byte-identical to the development CLI output.
+- Installed development CLI detected the real Photarium sample and cleaned its credentials; ExifTool **12.70** independently reported no C2PA fields afterward.
+- Sample dimensions remain **1168 × 1456**. Its compressed `VP8L` chunk is byte-identical. The original contains `VP8L` and `C2PA`; the cleaned file contains `VP8L` only.
+- Source SHA-256: `6bb907e66f0f9b666f420a336e20dc8b3f9d7494468c072eef6ba61461b6e976`.
+- Cleaned SHA-256: `58e70a7c17df683fadfa2d01cf602b5ea343e5cda2f36402d6035b2fd7ce20ff`.
+- External sample, ExifTool dumps, and JSON verification record are under `/private/tmp/noai-webp-integration/`; no external image was added to the repository.
+
+The Python 3.10–3.14 CI matrix and minimum-Pillow job are configured but have not run remotely. Regeneration tests use real encoding with stubbed inference; a real model run and independent pixel-watermark detection have not been performed. Photarium adapter changes, child upload, and hosted-original readback remain the subsequent consuming-repository integration phase.

@@ -79,7 +79,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="noai-watermark",
         description=(
-            "Remove invisible AI watermarks from images. "
+            "Apply pixel regeneration and inspect or remove embedded AI metadata. "
             "Use --metadata for metadata operations (clone, check, remove)."
         ),
         epilog=(

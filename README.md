@@ -9,14 +9,14 @@
 <img src="https://img.shields.io/badge/Donate-PayPal-blue.svg?logo=paypal" alt="Donate via PayPal" />
 </a>
 
-**Remove invisible watermarks and manage AI image metadata.**
+**Regenerate image pixels and manage embedded AI metadata.**
 
 AI image generators (Google Gemini, DALL-E, Midjourney, Stable Diffusion, etc.) embed invisible markers into every image they produce. These markers come in two forms:
 
 - **Invisible watermarks** — signals hidden directly in the pixel data (e.g. [SynthID](https://deepmind.google/technologies/synthid/), StableSignature, TreeRing). They survive file format conversions, screenshots, and basic editing. Standard image editors cannot see or remove them.
 - **AI metadata** — text fields stored alongside the image (EXIF tags, PNG text chunks, [C2PA](https://c2pa.org/) provenance manifests). They record the model, prompt, seed, and generation parameters.
 
-**noai-watermark** removes both. It uses diffusion-based image regeneration — encoding the image into latent space, injecting noise to break watermark patterns, and reconstructing via reverse diffusion — so the output is visually faithful but no longer carries the hidden signal. All AI metadata is automatically stripped from the output as well.
+**noai-watermark** uses diffusion-based image regeneration to disrupt hidden watermark patterns and provides separate metadata inspection and cleanup. Regeneration can change visible details. Whether an invisible watermark remains requires an independent compatible detector; this tool does not provide that detector. Metadata verification reports the recognized fields and container coverage it inspected.
 
 The controllable regeneration approach is based on [Liu et al. (arXiv:2410.05470)](https://arxiv.org/abs/2410.05470) and the [CtrlRegen](https://github.com/yepengliu/CtrlRegen) repository.
 
@@ -151,7 +151,21 @@ pip install -e ".[dev]"
 
 - Python >= 3.10
 - `pillow >= 10.0.0`, `piexif >= 1.1.3`, `torch >= 2.0.0`, `diffusers >= 0.25.0`, `transformers >= 4.35.0`, `accelerate >= 0.25.0`, `controlnet-aux`, `color-matcher`, `safetensors`
-- Supported formats: PNG, JPEG
+- Supported formats: PNG, JPEG, and WebP, with operation limits below.
+
+### Format support
+
+| Operation | PNG/JPEG | Static WebP | Animated WebP |
+|---|---|---|---|
+| Existing metadata APIs | Supported | Supported | Supported |
+| C2PA inspection | PNG supported; JPEG APP11 unimplemented | Supported | Supported |
+| Metadata cleanup | Existing behavior | Compressed image bytes preserved | Compressed frames and timing preserved |
+| Pixel regeneration | Supported | Original dimensions and alpha preserved | Rejected before model setup |
+| Metadata cloning/injection | Supported | Deferred | Deferred |
+
+WebP output is lossless by default. `--webp-quality 0` through `--webp-quality 100` explicitly selects lossy color encoding while retaining alpha samples. Metadata-only WebP cleaning requires a `.webp` destination. Input format is validated from bytes; unknown output extensions raise an error.
+
+See [WebP metadata policy](WEBP_METADATA_POLICY.md) for recognized EXIF/XMP fields, preservation guarantees, malformed-input behavior, and verification coverage.
 
 ### Maintainer Setup: Homebrew Automation
 
@@ -265,6 +279,12 @@ noai-watermark source.png -y -o cleaned.png
 
 # Authenticate with HuggingFace (or set HF_TOKEN env var)
 noai-watermark source.png --hf-token hf_xxxxx -o cleaned.png
+
+# Static WebP regeneration with lossless output and preserved alpha
+noai-watermark source.webp -o regenerated.webp
+
+# Explicit lossy WebP color encoding
+noai-watermark source.webp --webp-quality 85 -o regenerated.webp
 ```
 
 | Flag | Default | Description |
@@ -272,6 +292,7 @@ noai-watermark source.png --hf-token hf_xxxxx -o cleaned.png
 | `-o, --output` | overwrites source | Output file path |
 | `--strength` | `0.04` | Regeneration intensity (0.0–1.0) |
 | `--steps` | `50` | Denoising iterations |
+| `--webp-quality` | lossless | Explicit lossy WebP color quality, 0–100; 100 is still lossy |
 | `--model` | `Lykon/dreamshaper-8` | Any SD 1.5-compatible HuggingFace model |
 | `--model-profile` | `default` | Pipeline: `default` or `ctrlregen` |
 | `--device` | `auto` | `auto`, `cpu`, `mps`, or `cuda` |
@@ -298,6 +319,9 @@ noai-watermark source.png --remove-ai -o cleaned.png
 
 # Remove all metadata (AI + standard)
 noai-watermark source.png --remove-ai --remove-all-metadata -o cleaned.png
+
+# Static or animated WebP: remove credentials without re-encoding frames
+noai-watermark source.webp --remove-ai -o metadata-clean.webp
 ```
 
 | Flag | Description |
@@ -369,6 +393,23 @@ if has_c2pa_metadata(Path("image.png")):
 remove_ai_metadata(Path("image.png"), Path("cleaned.png"))
 ```
 
+### Structured Verification
+
+```python
+from metadata_handler import verify_image
+
+result = verify_image(
+    Path("regenerated.webp"),
+    expected_size=(1168, 1456),
+    pixel_regeneration_applied=True,  # Supply only if your operation actually ran.
+)
+print(result.to_dict())
+```
+
+The result separates format, dimensions, AI metadata, C2PA, regeneration, and inspection errors. Pixel-detector fields remain `None` because no independent detector runs. Existing cleaning and regeneration APIs continue returning `Path`.
+
+CLI check mode returns 0 when recognized metadata or credentials are present, 1 when absent, and 2 when input is invalid or inspection is incomplete. JPEG APP11/EXIF/XMP and PNG EXIF/XMP field inspection remain incomplete in the new verifier; those formats cannot receive an unconditional verified-absence message through that path.
+
 ---
 
 ## Watermark Removal Guide
@@ -404,6 +445,8 @@ For full flag reference, see [CLI Reference](#cli-reference). For compatible bas
 ---
 
 ## Verification
+
+WebP cleanup verifies recognized metadata and C2PA absence by inspecting the output container and decoding the saved image. Pixel regeneration is reported separately. A successful regeneration run does not establish the absence of an invisible watermark.
 
 Test watermark removal end-to-end with Google SynthID:
 
