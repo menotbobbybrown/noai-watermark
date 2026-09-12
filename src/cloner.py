@@ -34,6 +34,9 @@ def clone_metadata(
     Returns:
         Path to the output file with cloned metadata.
     """
+    from image_formats import validate_operation
+    validate_operation(source_path, "clone")
+    validate_operation(target_path, "clone", output_path or target_path)
     if ai_only:
         metadata = extract_ai_metadata(source_path)
     else:

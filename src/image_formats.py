@@ -43,6 +43,9 @@ def inspect_image(path: Path) -> ImageProperties:
     if fmt == "WEBP":
         chunks = parse_webp(Path(path).read_bytes())
         declared_animation = any(c.fourcc == b"ANIM" for c in chunks)
+    elif fmt == "PNG":
+        from png_chunks import credential_payloads
+        credential_payloads(Path(path).read_bytes())
     with Image.open(path) as image:
         if image.format != fmt:
             raise ValueError("Decoded image format differs from byte signature")

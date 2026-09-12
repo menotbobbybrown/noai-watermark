@@ -34,8 +34,8 @@ class TestIsSupportedFormat:
     def test_unsupported_bmp(self) -> None:
         assert is_supported_format(Path("image.bmp")) is False
 
-    def test_unsupported_webp(self) -> None:
-        assert is_supported_format(Path("image.webp")) is False
+    def test_supported_webp(self) -> None:
+        assert is_supported_format(Path("image.webp")) is True
 
     def test_unsupported_tiff(self) -> None:
         assert is_supported_format(Path("image.tiff")) is False

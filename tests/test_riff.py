@@ -52,3 +52,32 @@ def test_metadata_removal_only_changes_flags():
     assert result[0].payload[0] == original[0].payload[0] & ~0x24
     assert result[0].payload[1:] == original[0].payload[1:]
     assert result[1:] == tuple(c for c in original[1:] if c.fourcc not in (b"XMP ", b"ICCP"))
+
+
+@pytest.mark.parametrize("change", ["canvas", "frame_bounds", "frame_flags", "inner_length", "anim_order", "missing_anim_flag"])
+def test_animation_corruption_rejected(change):
+    data = webp(animated=True)
+    # Locate chunks independently of the production parser.
+    offset, parts = 12, []
+    while offset < len(data):
+        kind = data[offset:offset + 4]
+        size = struct.unpack_from("<I", data, offset + 4)[0]
+        parts.append([kind, bytearray(data[offset + 8:offset + 8 + size])])
+        offset += 8 + size + size % 2
+    first_frame = next(p for p in parts if p[0] == b"ANMF")
+    if change == "canvas":
+        parts[0][1][4:7] = b"\0\0\0"
+    elif change == "frame_bounds":
+        first_frame[1][:3] = b"\xff\xff\xff"
+    elif change == "frame_flags":
+        first_frame[1][15] |= 0x80
+    elif change == "inner_length":
+        first_frame[1][20:24] = b"\xff\xff\xff\xff"
+    elif change == "anim_order":
+        animation = next(p for p in parts if p[0] == b"ANIM")
+        parts.remove(animation)
+        parts.append(animation)
+    else:
+        parts[0][1][0] &= ~2
+    with pytest.raises(ValueError):
+        parse_webp(riff(b"".join(chunk(kind, bytes(payload)) for kind, payload in parts)))
