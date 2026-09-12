@@ -1,6 +1,6 @@
 # WebP Support Plan
 
-Status: implementation plan
+Status: reviewed for implementation; baseline verification recorded below
 
 Date: 2026-09-11
 
@@ -44,6 +44,7 @@ Authoritative format references:
 
 - [WebP container specification](https://developers.google.com/speed/webp/docs/riff_container)
 - [C2PA 2.4, embedding manifests into RIFF-based assets](https://spec.c2pa.org/specifications/specifications/2.4/specs/C2PA_Specification.html#_embedding_manifests_into_riff_based_assets)
+- [Pillow WebP reading and encoding options](https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html#webp)
 
 ## Current limitations
 
@@ -62,14 +63,14 @@ The current code has several connected PNG/JPEG assumptions:
 
 - Detect static and animated WebP by validated RIFF/WEBP bytes, with the suffix used only as a caller-facing hint.
 - Detect, extract, and remove top-level RIFF `C2PA` chunks.
-- Detect and clean AI-related XMP and EXIF data using the same documented field policy as PNG/JPEG.
+- Detect and clean AI-related XMP and EXIF data using the explicit WebP field policy below. Existing PNG/JPEG behavior is a compatibility baseline, not evidence that those formats already have complete field filtering.
 - Preserve non-AI ICC, EXIF, and XMP data when `keep_standard=True`.
 - Remove standard metadata when `keep_standard=False` while retaining the minimum image-container structure needed for valid decoding.
 - Preserve compressed image and animation chunks byte-for-byte in metadata-only mode.
 - Run pixel regeneration on static WebP images and emit a valid static WebP with the original dimensions.
 - Preserve a static WebP alpha channel by separating it before RGB regeneration and reattaching it unchanged.
 - Reject animated WebP in pixel-regeneration mode with a stable, explicit error before any output is written.
-- Keep all existing PNG/JPEG public entrypoints and behavior compatible.
+- Keep existing PNG/JPEG public entrypoints and return types compatible. Replace the undocumented unknown-extension-to-PNG fallback with an explicit error and update its tests.
 
 ### Deferred
 
@@ -83,11 +84,11 @@ Metadata-only cleaning can support animated WebP in the first release because a 
 
 ### 1. Replace implicit format fallback with explicit dispatch
 
-Change `get_image_format()` into a strict mapping for PNG, JPEG, and WebP. Unknown extensions or byte signatures must raise an informative error. Introduce operation-specific capability checks where support differs:
+Keep `get_image_format()` as an output-suffix helper with a strict mapping for PNG, JPEG, and WebP. Introduce separate byte-based input inspection and operation validation; output paths may not exist yet. Unknown output extensions, unsupported input bytes, and malformed recognized containers must raise informative errors. Introduce operation-specific capability checks where support differs:
 
-- Metadata inspect/remove: PNG, JPEG, static WebP, animated WebP.
+- Metadata inspect/remove: existing PNG/JPEG behavior plus static and animated WebP. JPEG APP11 C2PA inspection is not implemented and must not be advertised as verified coverage.
 - Pixel regeneration: PNG, JPEG, static WebP.
-- Metadata clone/inject: advertise WebP only after its container-specific tests pass.
+- Metadata clone/inject: retain PNG/JPEG support; defer public WebP cloning/injection to a separately tested follow-up. Reject any WebP donor or target in that operation before writing output.
 
 This avoids presenting one global “supported” set when individual operations have different guarantees.
 
@@ -176,10 +177,10 @@ Generate fixtures in `tests/conftest.py`; do not commit generated-image samples 
 - Standard ICC/EXIF/XMP survives with `keep_standard=True`.
 - AI fields and C2PA are absent after cleanup.
 - `keep_standard=False` produces the documented reduced metadata set.
-- RIFF size and padding remain valid after removal and injection.
+- RIFF size and padding remain valid after removal; repeat these assertions for injection when that follow-up capability is enabled.
 - Static regeneration returns a decodable WebP with matching dimensions and alpha.
 - Animated regeneration fails before output creation and leaves the source unchanged.
-- PNG/JPEG tests remain unchanged and pass.
+- PNG/JPEG regression tests pass; update only tests for intentional contract changes such as the unknown-suffix fallback. Preserve PNG framed C2PA bytes and legacy return types.
 
 ### Commands
 
@@ -232,8 +233,8 @@ Relevant Photarium files found during diagnosis:
 
 Keep the work reviewable in focused commits:
 
-1. Strict format dispatch and capability tests.
-2. RIFF/WebP C2PA detection, extraction, removal, and malformed-input tests.
+1. Strict output-format dispatch, byte-based input inspection, and capability tests. Keep public WebP operations disabled until their implementation is complete.
+2. RIFF/WebP C2PA detection, extraction, removal, and malformed-input tests; strict verification primitives.
 3. WebP EXIF/XMP/ICC preservation and metadata-only cleaning.
 4. Static WebP regeneration, alpha preservation, and animated rejection.
 5. Structured verification results, CLI wording, README, and release notes.
@@ -243,14 +244,101 @@ The upstream contribution can be submitted from this fork after the complete `no
 
 ## Acceptance criteria
 
-The `noai-watermark` work is ready when all of the following are true:
+Repository acceptance checks:
 
-- The complete test suite passes on the supported Python versions.
+- The complete test suite passes locally and in the Python compatibility matrix specified below; record any unavailable environments explicitly.
 - The synthetic OpenAI-style WebP is detected as containing AI metadata.
 - Metadata-only cleanup removes its `C2PA` chunk without changing compressed image or animation chunks.
 - Static demarking produces a valid WebP with matching dimensions and documented alpha/encoding behavior.
 - Animated demarking fails explicitly without writing a partial output.
 - Output verification parses the actual output bytes and cannot return a clean result solely because a format is unrecognized.
 - README and CLI help list support per operation and describe the pixel-watermark verification boundary.
-- The external Photarium sample is detected before processing and has no embedded C2PA or AI metadata after processing.
-- Photarium reads back and verifies the hosted child original while retaining catalog provenance and source lineage.
+
+Subsequent integration acceptance checks:
+
+- External-sample gate: the Photarium sample is detected before processing and has no embedded C2PA or recognized AI metadata after processing, verified independently with ExifTool.
+- Photarium integration gate: Photarium reads back and verifies the hosted child original while retaining catalog provenance and source lineage.
+
+## Implementation review and preparation
+
+Reviewed against local commit `408ba84` on `codex/plan-webp-support`. This preparation changes the plan only; implementation has not started.
+
+### Findings resolved in this revision
+
+| Finding in the current code | Implementation consequence |
+|---|---|
+| `utils.get_image_format()` is called for destinations that do not exist. | Keep output suffix resolution separate from input byte inspection. |
+| `extractor.has_ai_metadata()` checks exact top-level keys, while `extract_ai_metadata()` also checks keyword substrings. Neither inspects EXIF/XMP fields for AI content. | Use one WebP metadata classifier for detection, extraction, removal, and verification. |
+| `cleaner._extract_non_ai_metadata()` loads EXIF wholesale, even with `keep_standard=False`. | Do not describe the existing implementation as a complete preservation/filtering policy. Test the new WebP policy explicitly. |
+| C2PA APIs return false/empty for JPEG and swallow PNG read errors. | Add strict inspection for verification; preserve legacy PNG wrapper behavior where required by existing callers. JPEG C2PA absence remains unassessed. |
+| C2PA summary tables omit `gpt-image` and `c2pa.watermarked.unbound`. | Add explicit signatures and synthetic assertions; label extracted summaries as heuristic, without asserting signature validity. |
+| Regeneration catches metadata-cleanup failures and still reports success. | WebP cleanup or verification failure must prevent publication of the output. |
+| CLI dependency installation and model discovery precede image validation. | Validate operation, source, animation, and destination before entering the heavyweight handler. |
+| `remove_watermark_batch()` already includes `.webp` by default. | Exercise the batch path as well as the single-image API; failed items must never appear in its returned success list. |
+| Existing regeneration mocks sometimes return objects whose `save()` writes no image. | Add tests with real Pillow output and stub only model inference. These tests must reopen actual bytes. |
+| Release workflows build on Python 3.11; there is no test workflow. | Add a test matrix during implementation and distinguish local evidence from cross-version coverage. |
+
+### Module and API boundaries
+
+- `utils.py`: strict destination mapping, preserving valid PNG/JPEG calls. Keep `is_supported_format(path)` usable for nonexistent paths as a suffix hint; it is never proof of file validity or animation support.
+- `image_formats.py`: inspect actual input bytes and decoded properties; validate operation capabilities. A supported byte signature takes precedence over a misleading input suffix. Metadata-only WebP output must use `.webp`; reject implicit transcoding and in-place writes through a mismatched suffix. Regeneration may retain existing PNG/JPEG conversions, but WebP with alpha must not be silently written to JPEG.
+- `riff.py`: WebP container parsing and chunk rewriting, without importing metadata policy or diffusion code.
+- `webp_metadata.py`: EXIF/XMP parsing, field classification, cleaning, and preservation. Keep this responsibility separate from the RIFF parser.
+- `c2pa.py`: stable facade plus container-neutral payload extraction for internal use. Preserve PNG `extract_c2pa_chunk()` framing. Define WebP framed return bytes explicitly as its FourCC, little-endian length, payload, and optional padding; do not treat those bytes as a PNG chunk.
+- `image_output.py`: alpha reattachment, explicit encoding, temporary-file lifecycle, and replacement after verification. Both regeneration profiles use this helper through `WatermarkRemover`; `ctrlregen/engine.py` remains responsible for RGB inference.
+- `verification.py`: a typed result and strict output inspection, exported through `metadata_handler.py`. Existing cleaning and regeneration calls continue returning `Path`. Add a separate verification entrypoint; do not change those methods to return dictionaries or rely on a mutable last-result attribute.
+
+### RIFF validation and safe writes
+
+Validate the complete chunk stream before returning an absence result. Require exact declared size, complete headers/payloads/padding, and zero odd-length padding. Reject trailing bytes as this toolkit's stricter policy; the WebP specification allows readers to ignore them. Validate image-bearing structure, VP8X length/flags/canvas, essential chunk order, and animation frame structure. A header alone does not prove a decodable image.
+
+Duplicate C2PA chunks remain inspectable: report presence, expose every payload internally, and remove every occurrence. Unrecognized or empty C2PA payloads still count as embedded credentials. Reject duplicate EXIF/XMP/ICCP chunks in the first release to avoid conflicting field interpretations. Preserve unknown chunks and their order; removal of all metadata means the documented C2PA/EXIF/XMP/ICCP set, not a promise to classify arbitrary private chunks.
+
+Only metadata feature bits in VP8X may change during cleanup. Preserve canvas, alpha, animation, and all compressed image/frame bytes. Keep VP8X after metadata removal when valid. Follow-up injection must create VP8X when required by added EXIF/XMP/ICCP, preserve reconstruction order, and append C2PA last. C2PA has no VP8X feature bit.
+
+Write to a unique sibling temporary file, close all input handles, verify the temporary artifact, then replace the destination atomically. Any parse, encode, cleanup, or verification failure leaves the source and any existing destination unchanged and removes the temporary file. Cover both explicit destinations and default in-place use. Do not suppress cleanup exceptions on the WebP path.
+
+### WebP metadata policy
+
+Use explicit field identity and structured values. Do not apply broad substrings such as `model` to standard camera fields: EXIF Make/Model, Artist, Copyright, DateTime, Orientation, exposure fields, GPS, and ICC data must survive when retaining standard metadata.
+
+- EXIF: inspect Software, ImageDescription, UserComment, and Windows XP text fields for recognized generator names or structured generation parameters. Decode their declared text encodings. Remove an entire matching text field; retain unrelated fields and embedded thumbnails. Support TIFF-form EXIF and the common `Exif` prefix. Preserve an untouched EXIF chunk byte-for-byte; when filtering is required, verify retained tag values and fail if the serializer cannot preserve them.
+- XMP: parse XML without external-entity resolution; match property namespace/local name and recognized generator values. Handle both attributes and child elements, including RDF collections. Remove recognized AI parameter properties, generator-valued CreatorTool, and algorithmic digital-source declarations. Preserve unrelated creator, rights, title, description, dates, and camera properties. Pin exact names and namespace URIs in a policy table and paired positive/negative fixtures before implementing the classifier.
+- `keep_standard=True`: preserve ICCP and unchanged EXIF/XMP bytes. Modified packets may be reserialized, but retained values must survive. Unparseable metadata raises an explicit error; it cannot produce a clean verdict.
+- `keep_standard=False`: remove C2PA, EXIF, XMP, and ICCP chunks wholesale. This permits removing malformed metadata payloads when the RIFF container itself is valid. Removing ICC can affect color interpretation even though compressed image bytes remain unchanged.
+
+C2PA presence alone does not establish AI authorship. Retain the existing compatibility policy that AI cleanup strips embedded C2PA credentials, while reporting `c2pa_present` separately and documenting that policy. Claims of AI-metadata absence refer to recognized fields under the declared policy; they do not cover arbitrary private payloads.
+
+### Regeneration and result contract
+
+Use lossless WebP output by default. Add keyword-only `webp_quality: int | None = None` to the applicable APIs and `--webp-quality` to the CLI: `None` selects lossless; an integer from 0 through 100 explicitly selects lossy color encoding. Reject the option for non-WebP destinations. Document that quality 100 remains lossy. Preserve alpha samples exactly under either encoding mode. Set `exact=True` to retain RGB values under fully transparent pixels in lossless output; verify alpha on the minimum supported Pillow version as well as the current environment.
+
+Preflight animated WebP before RGB conversion or model discovery. Use both container animation declarations and decoded frame information, including a single-frame animation container. Raise `ValueError` with the stable message `Animated WebP is not supported for pixel regeneration` before output creation. In `watermark_remover.remove_watermark()`, run preflight ahead of the `WatermarkRemover(...)` constructor because that constructor may auto-install dependencies.
+
+Pad RGB input when a model requires dimensions divisible by eight, then remove only the added padding. Never crop original edges or resample the saved alpha. Test odd dimensions, dimensions below eight, and both default/CtrlRegen profiles. Reopen the saved image, load its pixels, and compare format, canvas, frame count, and alpha samples.
+
+The verification result includes the seven fields listed above plus `inspection_complete` and `inspection_errors`. Presence fields are nullable when inspection is unavailable or incomplete. `dimensions_valid` is nullable without an expected size. `pixel_regeneration_applied` comes from the operation that actually ran, not inference from output bytes. With no independent detector, both detector fields are null. Malformed/unsupported inputs must yield an explicit failure, never an all-clear result. JPEG C2PA coverage must remain marked incomplete in this new verifier until an APP11 implementation exists.
+
+Keep existing check-mode exit codes for detected/absent metadata (`0`/`1`); use `2` for invalid input or incomplete inspection. Catch check-mode errors so they do not escape as tracebacks. Emit verified-absence text only after complete inspection. Otherwise print the limited result and the reason. Replace unconditional regeneration-success wording with the actual operation and inspection results.
+
+### Test and delivery preparation
+
+Start with `tests/test_image_formats.py`, `tests/test_riff.py`, and `tests/test_verification.py`. Then add focused metadata, output, and CLI tests; keep fixture builders in a small test helper if `conftest.py` becomes unwieldy. Fixtures must be independently constructed, not exclusively produced by the implementation under test.
+
+Extend the original matrix with misleading suffixes, invalid image payloads inside valid RIFF framing, trailing data, nonzero/missing padding, conflicting metadata chunks, unknown chunks, all C2PA occurrences, standard camera Model, mixed EXIF/XMP properties, malformed metadata, partial alpha values, single-frame animation containers, in-place errors, existing destination preservation, repeated cleanup, batch failures, and CLI errors before any model/network calls. Test only the stubbed inference boundary for routine regression runs; real model execution is a separate integration check.
+
+Add CI for Python 3.10 through 3.14, recording dependency-resolution failures separately from code failures. Run the complete suite before each implementation commit. Exercise the installed CLI from the same virtual environment and verify a built wheel contains every new flat `src` module. Keep package version changes for the release step.
+
+Implement the RIFF/parser and strict verification foundation first, enable metadata operations after the field-policy tests pass, and enable static regeneration after transactional output tests pass. Public WebP clone/inject support remains deferred; do not silently discard unsupported metadata. Preserve the container-neutral payload boundary for that follow-up.
+
+The external Photarium sample remains an integration requirement from the earlier diagnosis; its hosted bytes have not been rechecked during this plan review. Obtain it through the Photarium MCP when implementation reaches that gate. Record source/output hashes, dimensions, chunk inventory, and ExifTool observations outside the repository. Real regeneration, Photarium changes, uploads, and hosted readback belong to that later verification work.
+
+### Baseline verification record
+
+- Command: `.venv/bin/python -m pytest -ra` at commit `408ba84`.
+- Result: **227 passed, 13 warnings, 11.79 seconds**, with no skipped tests.
+- Warnings include PyTorch's Python 3.14 JIT deprecation, missing optional MediaPipe, SciPy/timm deprecations, and duplicate model registrations; the passing suite does not establish real inference compatibility.
+- Runtime: Python 3.14.3, Pillow 12.3.0, libwebp 1.6.0, piexif 1.1.3, pytest 9.1.1. Pillow reports WebP support available.
+- ExifTool 12.70 is installed. It was not run against the external sample during preparation.
+- Other Python versions, real model inference, a built-wheel install, and Photarium hosted readback have not been verified in this review.
+- Local test log: `/private/tmp/noai-webp-review-pytest.log` (temporary evidence; the result above is the durable record).
