@@ -160,7 +160,7 @@ def extract_c2pa_chunk(image_path: Path) -> bytes | None:
                     for sig in C2PA_SIGNATURES:
                         if sig in chunk_data:
                             return chunk_header + chunk_data + crc
-                    
+
                     # Also check lowercase variants
                     if b"jumb" in chunk_data.lower() or b"c2pa" in chunk_data.lower():
                         return chunk_header + chunk_data + crc

@@ -8,7 +8,7 @@ def parse_c2pa_payload(chunk_data: bytes, c2pa_info: dict[str, Any]) -> None:
     """Parse C2PA chunk data and populate info dictionary."""
     # Debug: log raw chunk info
     c2pa_info["_raw_chunk_size"] = len(chunk_data)
-    
+
     # Find issuers
     issuers = []
     for sig, name in C2PA_ISSUERS.items():
@@ -76,4 +76,3 @@ def parse_c2pa_payload(chunk_data: bytes, c2pa_info: dict[str, Any]) -> None:
         c2pa_info["source_type"] = "algorithmicMedia"
     elif b"compositeWithTrainedAlgorithmicMedia" in chunk_data:
         c2pa_info["source_type"] = "compositeWithTrainedAlgorithmicMedia (AI-enhanced)"
-
