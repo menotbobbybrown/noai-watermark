@@ -93,7 +93,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "source", type=Path,
-        help=f"Source image file (formats: {', '.join(SUPPORTED_FORMATS)})",
+        help="Source: PNG, JPEG, WebP; animated WebP supports metadata inspection/removal only",
     )
     parser.add_argument(
         "target", type=Path, nargs="?",
@@ -133,6 +133,10 @@ def _build_parser() -> argparse.ArgumentParser:
 
     # ── Watermark removal options (default mode) ────────────────
     wm_group = parser.add_argument_group("watermark removal options (default mode)")
+    wm_group.add_argument(
+        "--webp-quality", type=int, default=None,
+        help="WebP lossy color quality (0-100); omit for lossless WebP output",
+    )
     wm_group.add_argument(
         "--strength", type=float, default=0.04,
         help="Regeneration intensity (0.0-1.0). Default: 0.04",
@@ -185,7 +189,11 @@ def _handle_remove_ai(args: argparse.Namespace) -> int:
             print(f"Output: {output_path}")
             print(f"Keep standard metadata: {keep_standard}")
 
-            if has_ai_metadata(args.source):
+            from verification import verify_image
+            before = verify_image(args.source)
+            if not before.inspection_complete:
+                print("\nSource metadata inspection is incomplete; cleanup will apply the requested policy.")
+            elif before.ai_metadata_present:
                 print("\n=== AI METADATA TO REMOVE ===")
                 for key, value in extract_ai_metadata(args.source).items():
                     print(_format_metadata_value(key, value))
@@ -199,11 +207,8 @@ def _handle_remove_ai(args: argparse.Namespace) -> int:
             keep_standard=keep_standard,
         )
 
-        if has_ai_metadata(result_path):
-            print(f"Warning: Some AI metadata may still be present in: {result_path}")
-            return 1
-        print(f"Successfully removed AI metadata from: {result_path}")
-        return 0
+        from noai_cli_verification import report_inspection
+        return report_inspection(result_path, cleaned=True)
 
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
@@ -263,7 +268,7 @@ def main() -> int:
 
     if not args.source.exists():
         print(f"Error: Source file '{args.source}' does not exist.", file=sys.stderr)
-        return 1
+        return 2
     if not is_supported_format(args.source):
         print(
             f"Warning: Source file '{args.source}' may not be a supported format "
@@ -273,13 +278,12 @@ def main() -> int:
 
     # ── Metadata mode ───────────────────────────────────────────
     if args.metadata or args.check_ai or args.remove_ai:
+        if args.webp_quality is not None:
+            print("Error: --webp-quality applies only to pixel regeneration.", file=sys.stderr)
+            return 2
         if args.check_ai:
-            if has_ai_metadata(args.source):
-                print(f"'{args.source}' contains AI-generated image metadata:")
-                print(get_ai_metadata_summary(args.source))
-                return 0
-            print(f"'{args.source}' does not contain AI-generated image metadata.")
-            return 1
+            from noai_cli_verification import check_ai
+            return check_ai(args.source)
 
         if args.remove_ai:
             return _handle_remove_ai(args)
