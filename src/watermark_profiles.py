@@ -12,6 +12,10 @@ LOW_STRENGTH = 0.04
 MEDIUM_STRENGTH = 0.35
 HIGH_STRENGTH = 0.7
 
+# Oracle measurements as of mid-2026 put SynthID removal at 0.15; Gemini images
+# survive both 0.05 and 0.10. Anything lower silently under-serves the common case.
+DEFAULT_STRENGTH = 0.15
+
 _HIGH_PERTURBATION = ("stegasamp", "stegastamp", "treering", "ringid")
 _LOW_PERTURBATION = ("stablesignature", "dwtectsvd", "rivagan", "ssl", "hidden")
 

@@ -30,6 +30,7 @@ from metadata_handler import (
     remove_ai_metadata,
     SUPPORTED_FORMATS,
 )
+from watermark_profiles import DEFAULT_STRENGTH
 
 
 # ── Branding ────────────────────────────────────────────────────────
@@ -138,8 +139,8 @@ def _build_parser() -> argparse.ArgumentParser:
         help="WebP lossy color quality (0-100); omit for lossless WebP output",
     )
     wm_group.add_argument(
-        "--strength", type=float, default=0.04,
-        help="Regeneration intensity (0.0-1.0). Default: 0.04",
+        "--strength", type=float, default=DEFAULT_STRENGTH,
+        help=f"Regeneration intensity (0.0-1.0). Default: {DEFAULT_STRENGTH}",
     )
     wm_group.add_argument(
         "--steps", type=int, default=50,

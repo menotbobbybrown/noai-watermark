@@ -24,6 +24,7 @@ from PIL import Image
 from watermark_profiles import (
     DEFAULT_MODEL_ID,
     CTRLREGEN_MODEL_ID,
+    DEFAULT_STRENGTH,
     LOW_STRENGTH,
     MEDIUM_STRENGTH,
     HIGH_STRENGTH,
@@ -223,6 +224,7 @@ class WatermarkRemover:
 
     DEFAULT_MODEL_ID = DEFAULT_MODEL_ID
     CTRLREGEN_MODEL_ID = CTRLREGEN_MODEL_ID
+    DEFAULT_STRENGTH = DEFAULT_STRENGTH
     LOW_STRENGTH = LOW_STRENGTH
     MEDIUM_STRENGTH = MEDIUM_STRENGTH
     HIGH_STRENGTH = HIGH_STRENGTH
@@ -393,7 +395,7 @@ class WatermarkRemover:
         validate_webp_quality(output_path, webp_quality)
         webp_path = properties.format == "WEBP" or get_image_format(output_path) == "WEBP"
 
-        strength = self.LOW_STRENGTH if strength is None else strength
+        strength = self.DEFAULT_STRENGTH if strength is None else strength
 
         if not 0.0 <= strength <= 1.0:
             raise ValueError(f"Strength must be between 0.0 and 1.0, got {strength}")
@@ -630,7 +632,7 @@ class WatermarkRemover:
 def remove_watermark(
     image_path: Path,
     output_path: Path | None = None,
-    strength: float = 0.04,
+    strength: float = DEFAULT_STRENGTH,
     model_id: str | None = None,
     device: str | None = None,
     hf_token: str | None = None,

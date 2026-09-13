@@ -44,7 +44,7 @@ The controllable regeneration approach is based on [Liu et al. (arXiv:2410.05470
 
 ## Example
 
-Default settings (`--strength 0.04 --steps 50`) — watermark removed, image visually unchanged:
+Run at `--strength 0.04 --steps 50` — watermark removed, image visually unchanged:
 
 <table>
 <tr>
@@ -256,14 +256,14 @@ Watermark removal is the **default mode** — no flag needed. Use `--metadata` t
 ### Watermark Removal (default)
 
 ```bash
-# Remove watermark with default settings (strength=0.04, steps=50)
+# Remove watermark with default settings (strength=0.15, steps=50)
 noai-watermark source.png -o cleaned.png
 
 # Force CPU inference (try this if MPS is slow on Mac)
 noai-watermark source.png --device cpu -o cleaned.png
 
 # Higher strength for stubborn watermarks
-noai-watermark source.png --strength 0.15 --steps 60 -o cleaned.png
+noai-watermark source.png --strength 0.35 --steps 60 -o cleaned.png
 
 # Use a different base model
 noai-watermark source.png --model runwayml/stable-diffusion-v1-5 -o cleaned.png
@@ -290,7 +290,7 @@ noai-watermark source.webp --webp-quality 85 -o regenerated.webp
 | Flag | Default | Description |
 |------|---------|-------------|
 | `-o, --output` | overwrites source | Output file path |
-| `--strength` | `0.04` | Regeneration intensity (0.0–1.0) |
+| `--strength` | `0.15` | Regeneration intensity (0.0–1.0) |
 | `--steps` | `50` | Denoising iterations |
 | `--webp-quality` | lossless | Explicit lossy WebP color quality, 0–100; 100 is still lossy |
 | `--model` | `Lykon/dreamshaper-8` | Any SD 1.5-compatible HuggingFace model |
@@ -347,7 +347,7 @@ if is_watermark_removal_available():
     remove_watermark(
         image_path=Path("watermarked.png"),
         output_path=Path("cleaned.png"),
-        strength=0.04,
+        strength=0.15,
     )
 
     # Persistent instance (recommended for batch/repeated use)
@@ -355,7 +355,7 @@ if is_watermark_removal_available():
     remover.remove_watermark(
         image_path=Path("watermarked.png"),
         output_path=Path("cleaned.png"),
-        strength=0.04,
+        strength=0.15,
         num_inference_steps=50,
         guidance_scale=7.5,
         seed=42,
@@ -365,7 +365,7 @@ if is_watermark_removal_available():
     remover.remove_watermark_batch(
         input_dir=Path("input_images"),
         output_dir=Path("cleaned_images"),
-        strength=0.04,
+        strength=0.15,
     )
 ```
 
@@ -427,8 +427,8 @@ This targets **invisible/embedded** watermarks (SynthID, StableSignature, TreeRi
 
 | Use Case | Flags |
 |----------|-------|
-| Minimal change (default) | `--strength 0.04 --steps 50` |
-| Balanced | `--strength 0.15 --steps 50` |
+| Minimal change | `--strength 0.04 --steps 50` |
+| Balanced (default) | `--strength 0.15 --steps 50` |
 | Aggressive | `--strength 0.35 --steps 60` |
 | Maximum removal | `--strength 0.7 --steps 60` |
 
@@ -464,7 +464,7 @@ noai-watermark image.png -o cleaned.png
 | Original | *"This image contains a SynthID watermark, which indicates that all or part of it was generated or edited using Google AI."* |
 | Cleaned | *"This image was not made with Google AI."* |
 
-See the [Example](#example) section for a real before/after comparison with default settings.
+See the [Example](#example) section for a real before/after comparison.
 
 Results vary with `strength`, `steps`, and model choice.
 
