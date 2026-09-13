@@ -44,8 +44,14 @@ from extractor import (
 )
 from injector import inject_metadata
 from utils import get_image_format, is_supported_format
+from verification import VerificationResult, verify_image
+from image_formats import inspect_image, validate_operation
 
 __all__ = [
+    "VerificationResult",
+    "verify_image",
+    "inspect_image",
+    "validate_operation",
     # Constants
     "SUPPORTED_FORMATS",
     "AI_METADATA_KEYS",

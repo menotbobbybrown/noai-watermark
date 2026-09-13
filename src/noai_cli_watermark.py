@@ -16,6 +16,16 @@ from pathlib import Path
 
 def handle_remove_watermark(args: argparse.Namespace) -> int:
     """Run diffusion-based invisible watermark removal."""
+    from image_formats import validate_operation, validate_webp_quality
+    output_path = args.output if args.output else args.source
+    quality = getattr(args, "webp_quality", None)
+    try:
+        validate_operation(args.source, "regenerate", output_path)
+        validate_webp_quality(output_path, quality)
+    except (OSError, ValueError) as error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 2
+
     if args.verbose:
         from watermark_remover import (
             is_watermark_removal_available,
@@ -104,6 +114,7 @@ def handle_remove_watermark(args: argparse.Namespace) -> int:
                 output_path=output_path,
                 strength=args.strength,
                 num_inference_steps=args.steps,
+                webp_quality=quality,
             )
 
         if args.verbose:
@@ -126,8 +137,8 @@ def handle_remove_watermark(args: argparse.Namespace) -> int:
                 progress_state,
             )
 
-        print(f"Successfully removed watermark from: {result_path}")
-        return 0
+        from noai_cli_verification import report_inspection
+        return report_inspection(result_path, regenerated=True, cleaned=True)
 
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)

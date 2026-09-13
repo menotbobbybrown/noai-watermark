@@ -361,6 +361,8 @@ class WatermarkRemover:
         num_inference_steps: int = 50,
         guidance_scale: float | None = None,
         seed: int | None = None,
+        *,
+        webp_quality: int | None = None,
     ) -> Path:
         """Remove watermark from an image using regeneration attack.
 
@@ -385,7 +387,13 @@ class WatermarkRemover:
         if output_path is None:
             output_path = image_path
 
-        strength = strength or self.LOW_STRENGTH
+        from image_formats import validate_operation, validate_webp_quality
+        from utils import get_image_format
+        properties = validate_operation(image_path, "regenerate", output_path)
+        validate_webp_quality(output_path, webp_quality)
+        webp_path = properties.format == "WEBP" or get_image_format(output_path) == "WEBP"
+
+        strength = self.LOW_STRENGTH if strength is None else strength
 
         if not 0.0 <= strength <= 1.0:
             raise ValueError(f"Strength must be between 0.0 and 1.0, got {strength}")
@@ -394,8 +402,16 @@ class WatermarkRemover:
             guidance_scale = 2.0 if self.model_profile == "ctrlregen" else 7.5
 
         self._set_progress("Loading and preprocessing input image...")
-        init_image = Image.open(image_path).convert("RGB")
+        with Image.open(image_path) as source:
+            init_image = source.convert("RGB")
+            alpha = source.convert("RGBA").getchannel("A") if webp_path and properties.has_alpha else None
         w, h = init_image.size
+        retained_metadata = {}
+        if webp_path:
+            from image_output import pad_rgb, retained_webp_metadata
+            if properties.format == "WEBP":
+                retained_metadata = retained_webp_metadata(Path(image_path))
+            init_image = pad_rgb(init_image)
         self._set_progress(f"Image loaded: {w}x{h}px | Model: {self.model_id}")
 
         generator = None
@@ -423,6 +439,17 @@ class WatermarkRemover:
         self._set_progress(
             f"Regeneration complete · Output: {w}x{h}px {cleaned_image.mode}"
         )
+
+        if webp_path:
+            from image_output import save_regenerated_image
+            if cleaned_image.size != init_image.size:
+                raise ValueError("Regeneration changed the padded canvas dimensions")
+            cleaned_image = cleaned_image.crop((0, 0, w, h))
+            self._set_progress("Encoding and verifying regenerated output...")
+            return save_regenerated_image(
+                cleaned_image, output_path, (w, h), alpha=alpha,
+                webp_quality=webp_quality, metadata=retained_metadata,
+            )
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
         fmt = output_path.suffix.lower()
@@ -570,6 +597,8 @@ class WatermarkRemover:
         strength: float | None = None,
         num_inference_steps: int = 50,
         extensions: tuple[str, ...] = (".png", ".jpg", ".jpeg", ".webp"),
+        *,
+        webp_quality: int | None = None,
     ) -> list[Path]:
         """Remove watermarks from all images in a directory."""
         if not input_dir.exists():
@@ -587,6 +616,7 @@ class WatermarkRemover:
                         output_path=output_path,
                         strength=strength,
                         num_inference_steps=num_inference_steps,
+                        webp_quality=webp_quality,
                     )
                     cleaned_paths.append(result_path)
                 except Exception as e:
@@ -604,11 +634,17 @@ def remove_watermark(
     model_id: str | None = None,
     device: str | None = None,
     hf_token: str | None = None,
+    *,
+    webp_quality: int | None = None,
 ) -> Path:
     """Convenience function to remove watermark from an image."""
+    from image_formats import validate_operation, validate_webp_quality
+    validate_operation(image_path, "regenerate", output_path or image_path)
+    validate_webp_quality(output_path or image_path, webp_quality)
     remover = WatermarkRemover(model_id=model_id, device=device, hf_token=hf_token)
     return remover.remove_watermark(
         image_path=image_path,
         output_path=output_path,
         strength=strength,
+        webp_quality=webp_quality,
     )

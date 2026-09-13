@@ -52,6 +52,12 @@ def remove_ai_metadata(
     if output_path is None:
         output_path = source_path
 
+    from image_formats import validate_operation
+    info = validate_operation(source_path, "clean", output_path)
+    if info.format == "WEBP":
+        from webp_metadata import clean_webp
+        return clean_webp(Path(source_path), Path(output_path), keep_standard)
+
     cleaned_metadata = _extract_non_ai_metadata(source_path, keep_standard)
 
     with Image.open(source_path) as img:

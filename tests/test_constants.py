@@ -30,8 +30,8 @@ class TestSupportedFormats:
         for fmt in SUPPORTED_FORMATS:
             assert fmt == fmt.lower()
 
-    def test_has_three_formats(self) -> None:
-        assert len(SUPPORTED_FORMATS) == 3
+    def test_has_four_formats(self) -> None:
+        assert len(SUPPORTED_FORMATS) == 4
 
 
 class TestAIMetadataKeys:

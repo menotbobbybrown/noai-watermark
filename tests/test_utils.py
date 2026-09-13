@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import pytest
+
 from utils import get_image_format, is_supported_format
 
 
@@ -32,8 +34,8 @@ class TestIsSupportedFormat:
     def test_unsupported_bmp(self) -> None:
         assert is_supported_format(Path("image.bmp")) is False
 
-    def test_unsupported_webp(self) -> None:
-        assert is_supported_format(Path("image.webp")) is False
+    def test_supported_webp(self) -> None:
+        assert is_supported_format(Path("image.webp")) is True
 
     def test_unsupported_tiff(self) -> None:
         assert is_supported_format(Path("image.tiff")) is False
@@ -66,8 +68,13 @@ class TestGetImageFormat:
     def test_jpeg_uppercase(self) -> None:
         assert get_image_format(Path("image.JPEG")) == "JPEG"
 
-    def test_unknown_format_defaults_to_png(self) -> None:
-        assert get_image_format(Path("image.gif")) == "PNG"
+    def test_unknown_format_raises(self) -> None:
+        with pytest.raises(ValueError, match="Unsupported output extension"):
+            get_image_format(Path("image.gif"))
 
-    def test_no_extension_defaults_to_png(self) -> None:
-        assert get_image_format(Path("image")) == "PNG"
+    def test_no_extension_raises(self) -> None:
+        with pytest.raises(ValueError, match="Unsupported output extension"):
+            get_image_format(Path("image"))
+
+    def test_webp_output_format(self) -> None:
+        assert get_image_format(Path("image.WEBP")) == "WEBP"

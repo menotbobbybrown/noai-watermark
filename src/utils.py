@@ -34,7 +34,8 @@ def get_image_format(file_path: Path) -> str:
     Returns:
         Format string (PNG, JPEG, etc.).
     """
-    suffix = file_path.suffix.lower()
-    if suffix in {".jpg", ".jpeg"}:
-        return "JPEG"
-    return "PNG"
+    formats = {".png": "PNG", ".jpg": "JPEG", ".jpeg": "JPEG", ".webp": "WEBP"}
+    try:
+        return formats[Path(file_path).suffix.lower()]
+    except KeyError:
+        raise ValueError(f"Unsupported output extension: {Path(file_path).suffix or '(none)'}") from None

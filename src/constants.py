@@ -5,7 +5,7 @@ so adding a new AI tool or metadata key requires updating only this file.
 """
 
 # Supported image formats
-SUPPORTED_FORMATS = {".png", ".jpg", ".jpeg"}
+SUPPORTED_FORMATS = {".png", ".jpg", ".jpeg", ".webp"}
 
 # AI-generated image metadata keys (Stable Diffusion, ComfyUI, Midjourney, etc.)
 AI_METADATA_KEYS = [
@@ -92,6 +92,7 @@ C2PA_ISSUERS = {
 
 # C2PA known AI tools
 C2PA_AI_TOOLS = {
+    b"gpt-image": "gpt-image",
     b"GPT-4o": "GPT-4o",
     b"ChatGPT": "ChatGPT",
     b"Sora": "Sora",
@@ -103,6 +104,7 @@ C2PA_AI_TOOLS = {
 
 # C2PA action types
 C2PA_ACTIONS = {
+    b"c2pa.watermarked.unbound": "watermarked.unbound",
     b"c2pa.created": "created",
     b"c2pa.converted": "converted",
     b"c2pa.edited": "edited",

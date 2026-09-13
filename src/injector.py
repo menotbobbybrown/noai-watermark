@@ -28,6 +28,11 @@ def inject_metadata(target_path: Path, output_path: Path, metadata: dict[str, An
         output_path: Path where the output file will be saved.
         metadata: Dictionary containing metadata to inject.
     """
+    from image_formats import validate_operation
+    validate_operation(target_path, "inject", output_path)
+    credential = metadata.get("c2pa_chunk")
+    if metadata.get("_source_format") == "WEBP" or (isinstance(credential, bytes) and credential.startswith(b"C2PA")):
+        raise ValueError("WebP metadata cloning and injection are not supported")
     with Image.open(target_path) as img:
         img = img.copy()
 

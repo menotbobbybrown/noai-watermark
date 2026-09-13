@@ -26,7 +26,11 @@ def extract_metadata(source_path: Path) -> dict[str, Any]:
     Returns:
         Dictionary containing all extracted metadata.
     """
+    from image_formats import inspect_image
+    properties = inspect_image(source_path)
     metadata: dict[str, Any] = {}
+    if properties.format == "WEBP":
+        metadata["_source_format"] = "WEBP"
 
     with Image.open(source_path) as img:
         # Extract EXIF data
@@ -73,6 +77,20 @@ def extract_ai_metadata(source_path: Path) -> dict[str, Any]:
     Returns:
         Dictionary containing only AI-related metadata.
     """
+    from image_formats import detect_format, inspect_image
+    if detect_format(source_path) == "WEBP":
+        from riff import parse_webp
+        from webp_metadata import inspect_metadata
+        inspect_image(source_path)
+        found = inspect_metadata(parse_webp(Path(source_path).read_bytes()))
+        result = {k: v for k, v in found.items() if not k.startswith("C2PA:")}
+        if has_c2pa_metadata(source_path):
+            result["c2pa"] = extract_c2pa_info(source_path)
+            result["c2pa_chunk"] = extract_c2pa_chunk(source_path)
+        if result:
+            result["_source_format"] = "WEBP"
+        return result
+
     ai_metadata: dict[str, Any] = {}
 
     with Image.open(source_path) as img:
@@ -106,6 +124,9 @@ def has_ai_metadata(image_path: Path) -> bool:
     Returns:
         True if AI metadata is detected, False otherwise.
     """
+    from image_formats import detect_format
+    if detect_format(image_path) == "WEBP":
+        return bool(extract_ai_metadata(image_path))
     with Image.open(image_path) as img:
         for key in AI_METADATA_KEYS:
             if key in img.info:
